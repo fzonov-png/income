@@ -9,7 +9,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=8" />
 </head>
 <body>
   <div class="app">
@@ -218,7 +218,7 @@
           <label class="field__label" for="fSource">Источник дохода</label>
           <div class="field__row">
             <input id="fSource" list="sourceList" maxlength="120" autocomplete="off" placeholder="Завод, организация, заказчик…" />
-            <button class="icon-btn field__add" id="addSourceFromForm" type="button" title="Добавить новый источник" aria-label="Добавить новый источник">
+            <button class="icon-btn field__add" id="addSourceFromForm" type="button" title="Добавить или настроить источники" aria-label="Добавить или настроить источники">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M12 5v14M5 12h14" />
               </svg>
@@ -334,12 +334,12 @@
     </div>
   </div>
 
-  <!-- ======================= МОДАЛКА: ИСТОЧНИК ======================= -->
+  <!-- ======================= МОДАЛКА: ИСТОЧНИКИ ======================= -->
   <div class="modal" id="sourceModal" hidden>
     <div class="modal__overlay" data-close></div>
-    <div class="modal__card modal__card--sm" role="dialog" aria-modal="true" aria-labelledby="sourceTitle">
+    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="sourceTitle">
       <div class="modal__head">
-        <h2 id="sourceTitle">Новый источник</h2>
+        <h2 id="sourceTitle">Источники дохода</h2>
         <button class="icon-btn" type="button" data-close aria-label="Закрыть">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -347,19 +347,21 @@
         </button>
       </div>
 
-      <form class="modal__body form" id="sourceForm" novalidate>
-        <label class="field">
-          <span class="field__label">Название источника</span>
-          <input id="sourceName" maxlength="120" autocomplete="off" placeholder="Например: Завод «Рифей»" />
-        </label>
+      <div class="modal__body">
+        <form class="source-add" id="sourceForm" novalidate>
+          <input id="sourceName" maxlength="120" autocomplete="off" placeholder="Новый источник" aria-label="Новый источник" />
+          <button class="btn btn--primary" type="submit" id="saveSourceBtn">Добавить</button>
+        </form>
 
         <p class="form__error" id="sourceError" hidden></p>
+        <p class="hint" id="sourceHint">Добавьте новый источник или выберите существующий.</p>
+
+        <div class="source-manager source-manager--modal" id="sourceModalList"></div>
 
         <div class="modal__actions">
-          <button class="btn" type="button" data-close>Отмена</button>
-          <button class="btn btn--primary" type="submit" id="saveSourceBtn">Добавить</button>
+          <button class="btn btn--primary" type="button" data-close>Готово</button>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 
@@ -382,7 +384,7 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script src="js/store.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/store.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>

@@ -1,13 +1,13 @@
 /* Простой service worker: приложение открывается без сети,
    данные всегда берутся из localStorage / GitHub API. */
-const CACHE = "income-shell-v3";
+const CACHE = "income-shell-v8";
 
 const SHELL = [
   "./",
   "./index.html",
-  "./css/style.css?v=3",
-  "./js/store.js?v=3",
-  "./js/app.js?v=3",
+  "./css/style.css?v=8",
+  "./js/store.js?v=8",
+  "./js/app.js?v=8",
   "./manifest.webmanifest",
   "./icon.svg",
 ];
