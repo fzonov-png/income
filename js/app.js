@@ -56,10 +56,11 @@
       "breakdown", "breakdownSub", "listCount", "entries", "emptyState", "emptyTitle",
       "emptyText", "emptyAddBtn", "footerHint", "footerSaved", "fab",
       "entryModal", "entryTitle", "entryForm", "formTypes", "fAmount", "fDate", "fSource",
-      "fNote", "formMethod", "formError", "saveEntryBtn", "sourceList",
+      "fNote", "formMethod", "formError", "saveEntryBtn", "sourceList", "addSourceFromForm",
       "settingsModal", "settingsForm", "sOwner", "sRepo", "sBranch", "sPath", "sToken",
       "settingsError", "settingsOk", "saveSettingsBtn", "disconnectBtn", "exportBtn",
-      "importInput", "clearBtn", "storageHint",
+      "importInput", "clearBtn", "storageHint", "addSourceBtn", "sourceListManager",
+      "sourceModal", "sourceTitle", "sourceForm", "sourceName", "sourceError", "saveSourceBtn",
       "confirmModal", "confirmTitle", "confirmText", "confirmOk", "toasts",
     ].forEach(function (id) {
       els[id] = $(id);
@@ -82,6 +83,8 @@
     editingId: null,
     formType: "advance",
     formMethod: "cash",
+    sourceEditing: null,
+    sourceReturnToEntry: false,
     confirmCb: null,
     busy: false,
   };
@@ -649,10 +652,77 @@
     els.typeChips.innerHTML = html;
   }
 
+  // Все источники: сохранённый список + всё, что встречается в записях.
+  function allSources() {
+    var seen = Object.create(null);
+    var list = [];
+
+    function add(name) {
+      name = String(name == null ? "" : name).trim();
+      if (!name) return;
+
+      var key = name.toLowerCase();
+      if (seen[key]) return;
+
+      seen[key] = true;
+      list.push(name);
+    }
+
+    (state.data.sources || []).forEach(add);
+    state.data.entries.forEach(function (entry) { add(entry.source); });
+
+    return list.sort(function (a, b) { return a.localeCompare(b, "ru"); });
+  }
+
+  // Приводит введённое название к уже существующему, чтобы не было дублей в разном регистре.
+  function resolveSourceName(name) {
+    name = String(name == null ? "" : name).trim();
+    if (!name) return "";
+
+    var key = name.toLowerCase();
+    var match = allSources().find(function (source) {
+      return source.toLowerCase() === key;
+    });
+
+    return match || name;
+  }
+
+  function sourceUsage(name) {
+    return state.data.entries.filter(function (entry) {
+      return entry.source === name;
+    }).length;
+  }
+
+  function renderSourceManager() {
+    if (!els.sourceListManager) return;
+
+    var sources = allSources();
+
+    if (!sources.length) {
+      els.sourceListManager.innerHTML =
+        '<p class="hint">Пока нет источников. Добавьте свой — он появится в форме записи и в фильтре.</p>';
+      return;
+    }
+
+    els.sourceListManager.innerHTML = sources
+      .map(function (name) {
+        var count = sourceUsage(name);
+        return (
+          '<div class="source-item" data-source="' + esc(name) + '">' +
+            '<span class="source-item__name" title="' + esc(name) + '">' + esc(name) + "</span>" +
+            '<span class="source-item__meta">' +
+              (count ? count + " " + plural(count, "запись", "записи", "записей") : "не используется") +
+            "</span>" +
+            '<button class="row__action" type="button" data-act="edit-source" title="Переименовать" aria-label="Переименовать">' + ICON_EDIT + "</button>" +
+            '<button class="row__action" type="button" data-act="delete-source" title="Удалить" aria-label="Удалить">' + ICON_TRASH + "</button>" +
+          "</div>"
+        );
+      })
+      .join("");
+  }
+
   function renderSources() {
-    var sources = unique(
-      state.data.entries.map(function (entry) { return entry.source; }).filter(Boolean)
-    ).sort(function (a, b) { return a.localeCompare(b, "ru"); });
+    var sources = allSources();
 
     if (state.source !== "all" && sources.indexOf(state.source) === -1) {
       state.source = "all";
@@ -672,6 +742,7 @@
 
   function renderAll() {
     renderSources();
+    renderSourceManager();
     renderTypeChips();
     renderKpis();
     renderChart();
@@ -744,7 +815,7 @@
 
     var amount = parseAmount(els.fAmount.value);
     var date = els.fDate.value;
-    var source = els.fSource.value.trim();
+    var source = resolveSourceName(els.fSource.value);
     var note = els.fNote.value.trim();
 
     if (!isFinite(amount) || amount <= 0) {
@@ -819,6 +890,108 @@
       function () {
         state.data.entries = state.data.entries.filter(function (item) { return item.id !== id; });
         persist("Запись удалена");
+      }
+    );
+  }
+
+  /* --------------------------- источники -------------------------- */
+
+  function openSourceModal(name, returnToEntry) {
+    state.sourceEditing = name || null;
+    state.sourceReturnToEntry = Boolean(returnToEntry);
+
+    els.sourceTitle.textContent = name ? "Переименовать источник" : "Новый источник";
+    els.saveSourceBtn.textContent = name ? "Сохранить" : "Добавить";
+    els.sourceName.value = name || "";
+    els.sourceError.hidden = true;
+
+    openModal(els.sourceModal);
+
+    window.setTimeout(function () {
+      els.sourceName.focus();
+      els.sourceName.select();
+    }, 60);
+  }
+
+  function showSourceError(message) {
+    els.sourceError.textContent = message;
+    els.sourceError.hidden = false;
+  }
+
+  function handleSourceSubmit(event) {
+    event.preventDefault();
+
+    var name = els.sourceName.value.trim().replace(/\s+/g, " ");
+    if (!name) {
+      showSourceError("Введите название источника.");
+      els.sourceName.focus();
+      return;
+    }
+
+    var editing = state.sourceEditing;
+    var duplicate = allSources().find(function (source) {
+      return source.toLowerCase() === name.toLowerCase() && source !== editing;
+    });
+
+    if (duplicate) {
+      showSourceError(
+        editing
+          ? "Источник с таким названием уже есть."
+          : "Такой источник уже есть — выберите его в списке."
+      );
+      return;
+    }
+
+    if (editing) {
+      if (name !== editing) {
+        state.data.sources = (state.data.sources || []).map(function (source) {
+          return source === editing ? name : source;
+        });
+        state.data.entries.forEach(function (entry) {
+          if (entry.source === editing) {
+            entry.source = name;
+            entry.updatedAt = new Date().toISOString();
+          }
+        });
+        if (state.source === editing) state.source = name;
+        if (els.fSource.value.trim() === editing) els.fSource.value = name;
+        persist("Источник переименован");
+      }
+    } else {
+      state.data.sources = state.data.sources || [];
+      state.data.sources.push(name);
+      if (state.sourceReturnToEntry) els.fSource.value = name;
+      persist("Источник добавлен");
+    }
+
+    state.sourceEditing = null;
+    state.sourceReturnToEntry = false;
+    closeModal(els.sourceModal);
+  }
+
+  function deleteSource(name) {
+    var count = sourceUsage(name);
+
+    confirmAction(
+      "Удалить источник?",
+      count
+        ? "«" + name + "» используется в " + count + " " + plural(count, "записи", "записях", "записях") +
+          ". Записи останутся, но источник у них будет очищен."
+        : "«" + name + "» будет удалён из списка.",
+      "Удалить",
+      function () {
+        state.data.sources = (state.data.sources || []).filter(function (source) {
+          return source !== name;
+        });
+        state.data.entries.forEach(function (entry) {
+          if (entry.source === name) {
+            entry.source = "";
+            entry.updatedAt = new Date().toISOString();
+          }
+        });
+        if (state.source === name) state.source = "all";
+        if (els.fSource.value.trim() === name) els.fSource.value = "";
+        persist("Источник удалён");
       }
     );
   }
@@ -970,7 +1143,19 @@
         }
 
         return Store.load().then(function (result) {
-          var remoteEntries = result.data.entries;
+          var remote = result.data;
+          var remoteEntries = remote.entries;
+          var localSources = localSnapshot.sources || [];
+
+          // Список источников объединяем: он не должен теряться при первом подключении.
+          var mergedSources = (remote.sources || []).slice();
+          localSources.forEach(function (source) {
+            var exists = mergedSources.some(function (item) {
+              return item.toLowerCase() === source.toLowerCase();
+            });
+            if (!exists) mergedSources.push(source);
+          });
+          localSnapshot.sources = mergedSources;
 
           if (!remoteEntries.length && localSnapshot.entries.length) {
             state.data = localSnapshot;
@@ -984,6 +1169,7 @@
           if (remoteEntries.length && localSnapshot.entries.length) {
             var mergedData = Store.emptyData();
             mergedData.entries = mergeEntries(localSnapshot.entries, remoteEntries);
+            mergedData.sources = mergedSources;
 
             state.data = mergedData;
             return Store.save(mergedData).then(function (saveResult) {
@@ -997,7 +1183,17 @@
             });
           }
 
-          state.data = result.data;
+          // Локальных записей нет, но есть источники, которых нет в файле — сохраняем их.
+          if (mergedSources.length !== (remote.sources || []).length) {
+            var sourceData = Store.normalize({ sources: mergedSources, entries: remoteEntries });
+            state.data = sourceData;
+            return Store.save(sourceData).then(function (saveResult) {
+              state.data = saveResult.data;
+              return { loaded: true, entries: remoteEntries.length };
+            });
+          }
+
+          state.data = remote;
           return { loaded: true, entries: remoteEntries.length };
         });
       })
@@ -1103,7 +1299,9 @@
         ". Это действие нельзя отменить, но данные останутся в истории GitHub.",
       "Удалить всё",
       function () {
+        var sources = (state.data.sources || []).slice();
         state.data = Store.emptyData();
+        state.data.sources = sources;
         persist("Все записи удалены");
         closeModal(els.settingsModal);
       }
@@ -1119,14 +1317,14 @@
 
   function closeModal(modal) {
     modal.hidden = true;
-    var anyOpen = ["entryModal", "settingsModal", "confirmModal"].some(function (id) {
+    var anyOpen = ["entryModal", "settingsModal", "sourceModal", "confirmModal"].some(function (id) {
       return els[id] && !els[id].hidden;
     });
     if (!anyOpen) document.body.classList.remove("is-locked");
   }
 
   function closeTopModal() {
-    var order = ["confirmModal", "settingsModal", "entryModal"];
+    var order = ["confirmModal", "sourceModal", "settingsModal", "entryModal"];
     for (var i = 0; i < order.length; i += 1) {
       var modal = els[order[i]];
       if (modal && !modal.hidden) {
@@ -1281,6 +1479,22 @@
     });
 
     els.entryForm.addEventListener("submit", handleEntrySubmit);
+
+    // источники
+    els.addSourceFromForm.addEventListener("click", function () { openSourceModal(null, true); });
+    els.addSourceBtn.addEventListener("click", function () { openSourceModal(null, false); });
+    els.sourceForm.addEventListener("submit", handleSourceSubmit);
+    els.sourceListManager.addEventListener("click", function (event) {
+      var action = event.target.closest("[data-act]");
+      if (!action) return;
+
+      var item = action.closest(".source-item");
+      if (!item) return;
+
+      var name = item.dataset.source;
+      if (action.dataset.act === "edit-source") openSourceModal(name, false);
+      if (action.dataset.act === "delete-source") deleteSource(name);
+    });
 
     // настройки
     els.settingsForm.addEventListener("submit", handleSettingsSubmit);

@@ -66,7 +66,26 @@
   }
 
   function emptyData() {
-    return { version: 1, updatedAt: null, entries: [] };
+    return { version: 1, updatedAt: null, sources: [], entries: [] };
+  }
+
+  function normalizeSources(list) {
+    var out = [];
+    var seen = Object.create(null);
+
+    (Array.isArray(list) ? list : []).forEach(function (item) {
+      if (typeof item !== "string") return;
+      var name = item.trim();
+      if (!name) return;
+
+      var key = name.toLowerCase();
+      if (seen[key]) return;
+
+      seen[key] = true;
+      out.push(name);
+    });
+
+    return out;
   }
 
   function normalize(data) {
@@ -95,6 +114,25 @@
       .filter(function (item) {
         return Boolean(item.date);
       });
+
+    // Источники: берём сохранённый список и добавляем всё, что встречается в записях.
+    out.sources = normalizeSources(data.sources);
+    var known = Object.create(null);
+    out.sources.forEach(function (source) {
+      known[source.toLowerCase()] = true;
+    });
+
+    out.entries.forEach(function (entry) {
+      if (!entry.source) return;
+      var key = entry.source.toLowerCase();
+      if (known[key]) return;
+      known[key] = true;
+      out.sources.push(entry.source);
+    });
+
+    out.sources.sort(function (a, b) {
+      return a.localeCompare(b, "ru");
+    });
 
     out.updatedAt = typeof data.updatedAt === "string" ? data.updatedAt : null;
     return out;
