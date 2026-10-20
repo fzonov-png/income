@@ -40,6 +40,10 @@
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
   var ICON_TRASH =
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>';
+  var ICON_CHECK =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  var ICON_X =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
   /* ----------------------------- DOM ------------------------------ */
 
@@ -61,6 +65,7 @@
       "settingsError", "settingsOk", "saveSettingsBtn", "disconnectBtn", "exportBtn",
       "importInput", "clearBtn", "storageHint", "addSourceBtn", "sourceListManager",
       "sourceModal", "sourceTitle", "sourceForm", "sourceName", "sourceError", "saveSourceBtn",
+      "sourceModalList", "sourceHint",
       "confirmModal", "confirmTitle", "confirmText", "confirmOk", "toasts",
     ].forEach(function (id) {
       els[id] = $(id);
@@ -693,32 +698,62 @@
     }).length;
   }
 
-  function renderSourceManager() {
-    if (!els.sourceListManager) return;
+  function sourceItemHTML(name, selectable) {
+    if (state.sourceEditing === name) {
+      return (
+        '<form class="source-item source-item--editing" data-source="' + esc(name) + '" data-edit-form>' +
+          '<input class="source-item__input" value="' + esc(name) + '" maxlength="120" autocomplete="off" aria-label="Название источника" />' +
+          '<button class="row__action" type="submit" title="Сохранить" aria-label="Сохранить">' + ICON_CHECK + "</button>" +
+          '<button class="row__action" type="button" data-act="cancel-edit" title="Отмена" aria-label="Отмена">' + ICON_X + "</button>" +
+        "</form>"
+      );
+    }
+
+    var count = sourceUsage(name);
+
+    return (
+      '<div class="source-item' + (selectable ? " source-item--selectable" : "") + '" data-source="' + esc(name) + '"' +
+        (selectable ? ' role="button" tabindex="0"' : "") + ">" +
+        '<span class="source-item__name" title="' + esc(name) + '">' + esc(name) + "</span>" +
+        '<span class="source-item__meta">' +
+          (count ? count + " " + plural(count, "запись", "записи", "записей") : "не используется") +
+        "</span>" +
+        '<button class="row__action" type="button" data-act="edit-source" title="Переименовать" aria-label="Переименовать">' + ICON_EDIT + "</button>" +
+        '<button class="row__action" type="button" data-act="delete-source" title="Удалить" aria-label="Удалить">' + ICON_TRASH + "</button>" +
+      "</div>"
+    );
+  }
+
+  function renderSourceList(container, selectable) {
+    if (!container) return;
 
     var sources = allSources();
 
     if (!sources.length) {
-      els.sourceListManager.innerHTML =
-        '<p class="hint">Пока нет источников. Добавьте свой — он появится в форме записи и в фильтре.</p>';
+      container.innerHTML =
+        '<p class="hint">Пока нет источников. Добавьте первый — он появится в форме записи и в фильтре.</p>';
       return;
     }
 
-    els.sourceListManager.innerHTML = sources
-      .map(function (name) {
-        var count = sourceUsage(name);
-        return (
-          '<div class="source-item" data-source="' + esc(name) + '">' +
-            '<span class="source-item__name" title="' + esc(name) + '">' + esc(name) + "</span>" +
-            '<span class="source-item__meta">' +
-              (count ? count + " " + plural(count, "запись", "записи", "записей") : "не используется") +
-            "</span>" +
-            '<button class="row__action" type="button" data-act="edit-source" title="Переименовать" aria-label="Переименовать">' + ICON_EDIT + "</button>" +
-            '<button class="row__action" type="button" data-act="delete-source" title="Удалить" aria-label="Удалить">' + ICON_TRASH + "</button>" +
-          "</div>"
-        );
-      })
+    container.innerHTML = sources
+      .map(function (name) { return sourceItemHTML(name, selectable); })
       .join("");
+  }
+
+  function renderSourceManager() {
+    renderSourceList(els.sourceListManager, false);
+  }
+
+  function renderSourceModalList() {
+    if (!els.sourceModalList) return;
+
+    renderSourceList(els.sourceModalList, state.sourceReturnToEntry);
+
+    if (els.sourceHint) {
+      els.sourceHint.textContent = state.sourceReturnToEntry
+        ? "Выберите источник для этого дохода или добавьте новый. Карандаш — переименовать."
+        : "Добавьте новый источник, переименуйте или удалите существующий.";
+    }
   }
 
   function renderSources() {
@@ -743,6 +778,7 @@
   function renderAll() {
     renderSources();
     renderSourceManager();
+    renderSourceModalList();
     renderTypeChips();
     renderKpis();
     renderChart();
@@ -896,29 +932,52 @@
 
   /* --------------------------- источники -------------------------- */
 
-  function openSourceModal(name, returnToEntry) {
-    state.sourceEditing = name || null;
-    state.sourceReturnToEntry = Boolean(returnToEntry);
-
-    els.sourceTitle.textContent = name ? "Переименовать источник" : "Новый источник";
-    els.saveSourceBtn.textContent = name ? "Сохранить" : "Добавить";
-    els.sourceName.value = name || "";
-    els.sourceError.hidden = true;
-
-    openModal(els.sourceModal);
-
-    window.setTimeout(function () {
-      els.sourceName.focus();
-      els.sourceName.select();
-    }, 60);
-  }
-
   function showSourceError(message) {
     els.sourceError.textContent = message;
     els.sourceError.hidden = false;
   }
 
-  function handleSourceSubmit(event) {
+  function openSourceManager(returnToEntry) {
+    state.sourceEditing = null;
+    state.sourceReturnToEntry = Boolean(returnToEntry);
+
+    els.sourceName.value = "";
+    els.sourceError.hidden = true;
+    els.sourceTitle.textContent = returnToEntry ? "Источник дохода" : "Источники дохода";
+
+    renderSourceManager();
+    renderSourceModalList();
+    openModal(els.sourceModal);
+
+    // На телефоне не открываем клавиатуру, если источник можно просто выбрать из списка.
+    window.setTimeout(function () {
+      if (!returnToEntry || !allSources().length) {
+        els.sourceName.focus();
+        return;
+      }
+
+      var firstRow = els.sourceModalList && els.sourceModalList.querySelector(".source-item--selectable");
+      if (firstRow) firstRow.focus();
+    }, 60);
+  }
+
+  function renameSource(oldName, newName) {
+    state.data.sources = (state.data.sources || []).map(function (source) {
+      return source === oldName ? newName : source;
+    });
+
+    state.data.entries.forEach(function (entry) {
+      if (entry.source === oldName) {
+        entry.source = newName;
+        entry.updatedAt = new Date().toISOString();
+      }
+    });
+
+    if (state.source === oldName) state.source = newName;
+    if (els.fSource.value.trim() === oldName) els.fSource.value = newName;
+  }
+
+  function handleSourceAdd(event) {
     event.preventDefault();
 
     var name = els.sourceName.value.trim().replace(/\s+/g, " ");
@@ -928,45 +987,137 @@
       return;
     }
 
-    var editing = state.sourceEditing;
     var duplicate = allSources().find(function (source) {
-      return source.toLowerCase() === name.toLowerCase() && source !== editing;
+      return source.toLowerCase() === name.toLowerCase();
     });
 
+    // Такой источник уже есть — просто выбираем его для дохода.
     if (duplicate) {
-      showSourceError(
-        editing
-          ? "Источник с таким названием уже есть."
-          : "Такой источник уже есть — выберите его в списке."
-      );
+      if (state.sourceReturnToEntry) {
+        els.fSource.value = duplicate;
+        closeModal(els.sourceModal);
+      } else {
+        showSourceError("Такой источник уже есть.");
+        els.sourceName.focus();
+      }
       return;
     }
 
-    if (editing) {
-      if (name !== editing) {
-        state.data.sources = (state.data.sources || []).map(function (source) {
-          return source === editing ? name : source;
-        });
-        state.data.entries.forEach(function (entry) {
-          if (entry.source === editing) {
-            entry.source = name;
-            entry.updatedAt = new Date().toISOString();
-          }
-        });
-        if (state.source === editing) state.source = name;
-        if (els.fSource.value.trim() === editing) els.fSource.value = name;
-        persist("Источник переименован");
-      }
+    state.data.sources = state.data.sources || [];
+    state.data.sources.push(name);
+
+    els.sourceName.value = "";
+    els.sourceError.hidden = true;
+
+    if (state.sourceReturnToEntry) {
+      els.fSource.value = name;
+      closeModal(els.sourceModal);
     } else {
-      state.data.sources = state.data.sources || [];
-      state.data.sources.push(name);
-      if (state.sourceReturnToEntry) els.fSource.value = name;
-      persist("Источник добавлен");
+      renderSourceModalList();
+      els.sourceName.focus();
+    }
+
+    persist("Источник добавлен");
+  }
+
+  function startSourceEdit(name) {
+    state.sourceEditing = name;
+    els.sourceError.hidden = true;
+
+    renderSourceManager();
+    renderSourceModalList();
+
+    var container = els.sourceModal && !els.sourceModal.hidden
+      ? els.sourceModalList
+      : els.sourceListManager;
+    var input = container && container.querySelector(".source-item--editing input");
+
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+
+  function cancelSourceEdit() {
+    state.sourceEditing = null;
+    els.sourceError.hidden = true;
+    renderSourceManager();
+    renderSourceModalList();
+  }
+
+  function handleSourceEdit(event) {
+    var form = event.target.closest("[data-edit-form]");
+    if (!form) return;
+
+    event.preventDefault();
+
+    var oldName = form.dataset.source;
+    var input = form.querySelector("input");
+    var name = input.value.trim().replace(/\s+/g, " ");
+
+    if (!name) {
+      showSourceError("Введите название источника.");
+      input.focus();
+      return;
+    }
+
+    var duplicate = allSources().find(function (source) {
+      return source.toLowerCase() === name.toLowerCase() && source !== oldName;
+    });
+
+    if (duplicate) {
+      showSourceError("Источник с таким названием уже есть.");
+      input.focus();
+      return;
+    }
+
+    if (name !== oldName) {
+      renameSource(oldName, name);
+      persist("Источник переименован");
     }
 
     state.sourceEditing = null;
-    state.sourceReturnToEntry = false;
+    els.sourceError.hidden = true;
+    renderSourceManager();
+    renderSourceModalList();
+  }
+
+  function selectSource(name) {
+    els.fSource.value = name;
     closeModal(els.sourceModal);
+  }
+
+  function handleSourceListClick(event, selectable) {
+    var item = event.target.closest(".source-item");
+    if (!item) return;
+
+    var action = event.target.closest("[data-act]");
+    var name = item.dataset.source;
+
+    if (action) {
+      if (action.dataset.act === "edit-source") {
+        startSourceEdit(name);
+      } else if (action.dataset.act === "delete-source") {
+        deleteSource(name);
+      } else if (action.dataset.act === "cancel-edit") {
+        cancelSourceEdit();
+      }
+      return;
+    }
+
+    if (selectable && !state.sourceEditing) selectSource(name);
+  }
+
+  function handleSourceListKeydown(event, selectable) {
+    if (!selectable || state.sourceEditing) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    if (event.target.closest("button, input, form")) return;
+
+    var item = event.target.closest(".source-item");
+    if (!item) return;
+
+    event.preventDefault();
+    selectSource(item.dataset.source);
   }
 
   function deleteSource(name) {
@@ -990,7 +1141,10 @@
           }
         });
         if (state.source === name) state.source = "all";
+        if (state.sourceEditing === name) state.sourceEditing = null;
         if (els.fSource.value.trim() === name) els.fSource.value = "";
+        renderSourceManager();
+        renderSourceModalList();
         persist("Источник удалён");
       }
     );
@@ -1316,6 +1470,13 @@
   }
 
   function closeModal(modal) {
+    if (modal === els.sourceModal) {
+      state.sourceEditing = null;
+      state.sourceReturnToEntry = false;
+      renderSourceManager();
+      renderSourceModalList();
+    }
+
     modal.hidden = true;
     var anyOpen = ["entryModal", "settingsModal", "sourceModal", "confirmModal"].some(function (id) {
       return els[id] && !els[id].hidden;
@@ -1480,21 +1641,31 @@
 
     els.entryForm.addEventListener("submit", handleEntrySubmit);
 
-    // источники
-    els.addSourceFromForm.addEventListener("click", function () { openSourceModal(null, true); });
-    els.addSourceBtn.addEventListener("click", function () { openSourceModal(null, false); });
-    els.sourceForm.addEventListener("submit", handleSourceSubmit);
-    els.sourceListManager.addEventListener("click", function (event) {
-      var action = event.target.closest("[data-act]");
-      if (!action) return;
-
-      var item = action.closest(".source-item");
-      if (!item) return;
-
-      var name = item.dataset.source;
-      if (action.dataset.act === "edit-source") openSourceModal(name, false);
-      if (action.dataset.act === "delete-source") deleteSource(name);
-    });
+    // источники (проверяем наличие элементов: HTML и JS могут обновиться не одновременно)
+    if (els.addSourceFromForm) {
+      els.addSourceFromForm.addEventListener("click", function () { openSourceManager(true); });
+    }
+    if (els.addSourceBtn) {
+      els.addSourceBtn.addEventListener("click", function () { openSourceManager(false); });
+    }
+    if (els.sourceForm) {
+      els.sourceForm.addEventListener("submit", handleSourceAdd);
+    }
+    if (els.sourceListManager) {
+      els.sourceListManager.addEventListener("click", function (event) {
+        handleSourceListClick(event, false);
+      });
+      els.sourceListManager.addEventListener("submit", handleSourceEdit);
+    }
+    if (els.sourceModalList) {
+      els.sourceModalList.addEventListener("click", function (event) {
+        handleSourceListClick(event, state.sourceReturnToEntry);
+      });
+      els.sourceModalList.addEventListener("submit", handleSourceEdit);
+      els.sourceModalList.addEventListener("keydown", function (event) {
+        handleSourceListKeydown(event, state.sourceReturnToEntry);
+      });
+    }
 
     // настройки
     els.settingsForm.addEventListener("submit", handleSettingsSubmit);
@@ -1518,7 +1689,12 @@
     });
 
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") closeTopModal();
+      if (event.key !== "Escape") return;
+      if (state.sourceEditing) {
+        cancelSourceEdit();
+        return;
+      }
+      closeTopModal();
     });
 
     // подтверждение
