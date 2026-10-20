@@ -9,7 +9,7 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css?v=8" />
+  <link rel="stylesheet" href="css/style.css?v=9" />
 </head>
 <body>
   <div class="app">
@@ -365,6 +365,48 @@
     </div>
   </div>
 
+  <!-- ======================= МОДАЛКА: ВИДЫ ДОХОДА ======================= -->
+  <div class="modal" id="typeModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="typeTitle">
+      <div class="modal__head">
+        <h2 id="typeTitle">Виды дохода</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal__body">
+        <form class="type-form" id="typeForm" novalidate>
+          <label class="field">
+            <span class="field__label">Название вида</span>
+            <input id="typeName" maxlength="40" autocomplete="off" placeholder="Например: Премия" aria-label="Название вида дохода" />
+          </label>
+
+          <div class="field">
+            <span class="field__label">Цвет</span>
+            <div class="swatches" id="typeColors" role="radiogroup" aria-label="Цвет вида дохода"></div>
+          </div>
+
+          <p class="form__error" id="typeError" hidden></p>
+
+          <div class="modal__actions">
+            <button class="btn" type="button" id="cancelTypeEditBtn" hidden>Отмена</button>
+            <button class="btn btn--primary" type="submit" id="saveTypeBtn">Добавить</button>
+          </div>
+        </form>
+
+        <div class="type-manager">
+          <h3 class="type-manager__title">Свои виды</h3>
+          <div class="source-manager" id="typeList"></div>
+          <p class="hint">Стандартные виды изменить нельзя. Свои можно переименовать или удалить, если они ещё не используются.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================= МОДАЛКА: ПОДТВЕРЖДЕНИЕ ======================= -->
   <div class="modal" id="confirmModal" hidden>
     <div class="modal__overlay" data-close></div>
@@ -384,7 +426,7 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script src="js/store.js?v=8"></script>
-  <script src="js/app.js?v=8"></script>
+  <script src="js/store.js?v=9"></script>
+  <script src="js/app.js?v=9"></script>
 </body>
 </html>

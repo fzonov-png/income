@@ -14,10 +14,10 @@
     { id: "trip", label: "Командировка (суточные)", color: "#f472b6" },
   ];
 
-  var TYPE_MAP = {};
-  TYPES.forEach(function (type) {
-    TYPE_MAP[type.id] = type;
-  });
+  var TYPE_COLORS = [
+    "#38bdf8", "#34d399", "#fbbf24", "#a78bfa", "#f472b6",
+    "#f97316", "#22d3ee", "#eab308", "#fb7185", "#4ade80",
+  ];
 
   var METHOD_LABEL = { cash: "Наличные", bank: "Безнал" };
 
@@ -66,6 +66,8 @@
       "importInput", "clearBtn", "storageHint", "addSourceBtn", "sourceListManager",
       "sourceModal", "sourceTitle", "sourceForm", "sourceName", "sourceError", "saveSourceBtn",
       "sourceModalList", "sourceHint",
+      "typeModal", "typeTitle", "typeForm", "typeName", "typeColors", "typeError",
+      "saveTypeBtn", "cancelTypeEditBtn", "typeList",
       "confirmModal", "confirmTitle", "confirmText", "confirmOk", "toasts",
     ].forEach(function (id) {
       els[id] = $(id);
@@ -90,9 +92,37 @@
     formMethod: "cash",
     sourceEditing: null,
     sourceReturnToEntry: false,
+    editingTypeId: null,
+    typeColor: TYPE_COLORS[0],
     confirmCb: null,
     busy: false,
   };
+
+  function allTypes() {
+    var custom = state.data && Array.isArray(state.data.types) ? state.data.types : [];
+    return TYPES.concat(custom);
+  }
+
+  function typeById(id) {
+    return allTypes().find(function (type) { return type.id === id; }) || null;
+  }
+
+  function typeUsage(id) {
+    return state.data.entries.filter(function (entry) { return entry.type === id; }).length;
+  }
+
+  function nextTypeColor() {
+    var used = Object.create(null);
+    (state.data.types || []).forEach(function (type) {
+      used[String(type.color).toLowerCase()] = true;
+    });
+
+    for (var i = 0; i < TYPE_COLORS.length; i += 1) {
+      if (!used[TYPE_COLORS[i].toLowerCase()]) return TYPE_COLORS[i];
+    }
+
+    return TYPE_COLORS[(state.data.types || []).length % TYPE_COLORS.length];
+  }
 
   var nfInt = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
   var nfMoney = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
@@ -184,6 +214,43 @@
     return Array.from(map.values());
   }
 
+  function typeTime(type) {
+    return new Date(type.updatedAt || type.createdAt || 0).getTime() || 0;
+  }
+
+  function mergeTypes(localTypes, remoteTypes) {
+    var map = new Map();
+
+    (remoteTypes || []).forEach(function (type) {
+      map.set(type.id, type);
+    });
+
+    (localTypes || []).forEach(function (type) {
+      var existing = map.get(type.id);
+      if (!existing || typeTime(type) > typeTime(existing)) {
+        map.set(type.id, type);
+      }
+    });
+
+    return Array.from(map.values());
+  }
+
+  function typesDiffer(a, b) {
+    var left = a || [];
+    var right = b || [];
+    if (left.length !== right.length) return true;
+
+    var map = new Map();
+    right.forEach(function (type) { map.set(type.id, type); });
+
+    return left.some(function (type) {
+      var other = map.get(type.id);
+      return !other ||
+        other.label !== type.label ||
+        String(other.color).toLowerCase() !== String(type.color).toLowerCase();
+    });
+  }
+
   /* ---------------------------- период ---------------------------- */
 
   function getRange() {
@@ -254,7 +321,8 @@
         if (state.method !== "all" && entry.method !== state.method) return false;
         if (state.source !== "all" && entry.source !== state.source) return false;
         if (query) {
-          var typeLabel = TYPE_MAP[entry.type] ? TYPE_MAP[entry.type].label : "";
+          var entryType = typeById(entry.type);
+          var typeLabel = entryType ? entryType.label : "";
           var haystack = (entry.source + " " + entry.note + " " + entry.amount + " " + typeLabel).toLowerCase();
           if (haystack.indexOf(query) === -1) return false;
         }
@@ -527,13 +595,13 @@
     var byType = {};
 
     list.forEach(function (entry) {
-      var id = TYPE_MAP[entry.type] ? entry.type : "side";
+      var id = typeById(entry.type) ? entry.type : "side";
       if (!byType[id]) byType[id] = { sum: 0, count: 0 };
       byType[id].sum += Number(entry.amount) || 0;
       byType[id].count += 1;
     });
 
-    var rows = TYPES.filter(function (type) { return byType[type.id]; })
+    var rows = allTypes().filter(function (type) { return byType[type.id]; })
       .map(function (type) {
         return { type: type, sum: byType[type.id].sum, count: byType[type.id].count };
       })
@@ -565,7 +633,7 @@
   /* ----------------------------- список --------------------------- */
 
   function rowHTML(entry) {
-    var type = TYPE_MAP[entry.type] || { label: entry.type, color: "#8ea3ba" };
+    var type = typeById(entry.type) || { label: entry.type, color: "#8ea3ba" };
     var date = parseISODate(entry.date);
     var meta = entry.source || "";
     if (entry.note) meta += (meta ? " · " : "") + entry.note;
@@ -637,6 +705,12 @@
   }
 
   function renderTypeChips() {
+    var types = allTypes();
+    var validIds = new Set(types.map(function (type) { return type.id; }));
+    Array.from(state.types).forEach(function (id) {
+      if (!validIds.has(id)) state.types.delete(id);
+    });
+
     var list = getFiltered({ ignoreType: true });
     var counts = {};
     list.forEach(function (entry) {
@@ -645,7 +719,7 @@
 
     var html = '<button class="chip' + (state.types.size === 0 ? " is-active" : "") + '" type="button" data-type="all">Все виды</button>';
 
-    TYPES.forEach(function (type) {
+    types.forEach(function (type) {
       var active = state.types.has(type.id);
       html +=
         '<button class="chip' + (active ? " is-active" : "") + '" type="button" data-type="' + type.id + '" style="--dot:' + type.color + '">' +
@@ -779,6 +853,10 @@
     renderSources();
     renderSourceManager();
     renderSourceModalList();
+    renderFormTypes();
+    syncFormType();
+    renderTypeColors();
+    renderTypeList();
     renderTypeChips();
     renderKpis();
     renderChart();
@@ -790,17 +868,20 @@
   /* ----------------------------- запись --------------------------- */
 
   function renderFormTypes() {
-    els.formTypes.innerHTML = TYPES.map(function (type) {
+    els.formTypes.innerHTML = allTypes().map(function (type) {
       return (
-        '<button class="type" type="button" role="radio" data-type="' + type.id + '" style="--type-color:' + type.color + '">' +
+        '<button class="type" type="button" role="radio" data-type="' + esc(type.id) + '" style="--type-color:' + esc(type.color) + '">' +
           "<i></i><span>" + esc(type.label) + "</span>" +
         "</button>"
       );
-    }).join("");
+    }).join("") +
+      '<button class="type type--add" type="button" data-act="add-type">' +
+        "<i>+</i><span>Свой вид</span>" +
+      "</button>";
   }
 
   function syncFormType() {
-    Array.prototype.forEach.call(els.formTypes.querySelectorAll(".type"), function (button) {
+    Array.prototype.forEach.call(els.formTypes.querySelectorAll(".type[data-type]"), function (button) {
       var active = button.dataset.type === state.formType;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-checked", active ? "true" : "false");
@@ -815,7 +896,7 @@
 
   function openEntry(entry) {
     state.editingId = entry ? entry.id : null;
-    state.formType = entry ? entry.type : "advance";
+    state.formType = entry ? (typeById(entry.type) ? entry.type : "advance") : "advance";
     state.formMethod = entry ? entry.method : "cash";
 
     els.entryTitle.textContent = entry ? "Редактировать доход" : "Новый доход";
@@ -854,6 +935,10 @@
     var source = resolveSourceName(els.fSource.value);
     var note = els.fNote.value.trim();
 
+    if (!typeById(state.formType)) {
+      showFormError("Выберите вид дохода.");
+      return;
+    }
     if (!isFinite(amount) || amount <= 0) {
       showFormError("Укажите сумму больше нуля. Можно писать с копейками: 12500,50");
       els.fAmount.focus();
@@ -918,7 +1003,7 @@
     var entry = state.data.entries.find(function (item) { return item.id === id; });
     if (!entry) return;
 
-    var type = TYPE_MAP[entry.type] || { label: "Доход" };
+    var type = typeById(entry.type) || { label: "Доход" };
     confirmAction(
       "Удалить запись?",
       type.label + " · " + money(entry.amount) + " · " + isoShort(entry.date) + (entry.source ? " · " + entry.source : ""),
@@ -1150,6 +1235,227 @@
     );
   }
 
+  /* --------------------------- виды дохода ------------------------ */
+
+  function renderTypeColors() {
+    if (!els.typeColors) return;
+
+    els.typeColors.innerHTML = TYPE_COLORS.map(function (color) {
+      var active = state.typeColor === color;
+      return (
+        '<button class="swatch' + (active ? " is-active" : "") + '" type="button" data-color="' + color + '"' +
+          ' style="--swatch:' + color + '" role="radio" aria-checked="' + (active ? "true" : "false") + '"' +
+          ' aria-label="Цвет ' + color + '"></button>'
+      );
+    }).join("");
+  }
+
+  function renderTypeList() {
+    if (!els.typeList) return;
+
+    var types = state.data.types || [];
+
+    if (!types.length) {
+      els.typeList.innerHTML =
+        '<p class="hint">Своих видов пока нет. Добавьте первый — он появится в форме дохода.</p>';
+      return;
+    }
+
+    els.typeList.innerHTML = types.map(function (type) {
+      var count = typeUsage(type.id);
+      return (
+        '<div class="source-item' + (state.editingTypeId === type.id ? " is-editing" : "") + '" data-type-id="' + esc(type.id) + '">' +
+          '<span class="source-item__dot" style="--dot:' + esc(type.color) + '"></span>' +
+          '<span class="source-item__name" title="' + esc(type.label) + '">' + esc(type.label) + "</span>" +
+          '<span class="source-item__meta">' +
+            (count ? count + " " + plural(count, "запись", "записи", "записей") : "не используется") +
+          "</span>" +
+          '<button class="row__action" type="button" data-act="edit-type" title="Переименовать" aria-label="Переименовать">' + ICON_EDIT + "</button>" +
+          '<button class="row__action" type="button" data-act="delete-type" title="Удалить" aria-label="Удалить">' + ICON_TRASH + "</button>" +
+        "</div>"
+      );
+    }).join("");
+  }
+
+  function resetTypeForm() {
+    state.editingTypeId = null;
+    state.typeColor = nextTypeColor();
+
+    if (els.typeForm) els.typeForm.reset();
+    if (els.typeError) els.typeError.hidden = true;
+    if (els.typeTitle) els.typeTitle.textContent = "Виды дохода";
+    if (els.saveTypeBtn) els.saveTypeBtn.textContent = "Добавить";
+    if (els.cancelTypeEditBtn) els.cancelTypeEditBtn.hidden = true;
+
+    renderTypeColors();
+    renderTypeList();
+  }
+
+  function openTypeManager(editId) {
+    resetTypeForm();
+
+    renderTypeList();
+    openModal(els.typeModal);
+
+    if (editId) {
+      startTypeEdit(editId);
+    } else {
+      window.setTimeout(function () {
+        els.typeName.focus();
+      }, 60);
+    }
+  }
+
+  function startTypeEdit(id) {
+    var type = (state.data.types || []).find(function (item) {
+      return item.id === id;
+    });
+    if (!type) return;
+
+    state.editingTypeId = id;
+    state.typeColor = type.color;
+
+    els.typeName.value = type.label;
+    els.typeError.hidden = true;
+    els.typeTitle.textContent = "Изменить вид дохода";
+    els.saveTypeBtn.textContent = "Сохранить";
+    els.cancelTypeEditBtn.hidden = false;
+
+    renderTypeColors();
+    renderTypeList();
+
+    els.typeName.focus();
+    els.typeName.select();
+  }
+
+  function cancelTypeEdit() {
+    resetTypeForm();
+    els.typeName.focus();
+  }
+
+  function showTypeError(message) {
+    els.typeError.textContent = message;
+    els.typeError.hidden = false;
+  }
+
+  function handleTypeSubmit(event) {
+    event.preventDefault();
+
+    var label = els.typeName.value.trim().replace(/\s+/g, " ").slice(0, 40);
+    if (!label) {
+      showTypeError("Введите название вида дохода.");
+      els.typeName.focus();
+      return;
+    }
+
+    var duplicate = allTypes().find(function (type) {
+      return type.label.toLowerCase() === label.toLowerCase() && type.id !== state.editingTypeId;
+    });
+
+    if (duplicate) {
+      showTypeError("Вид с таким названием уже есть.");
+      els.typeName.focus();
+      return;
+    }
+
+    var wasEditing = Boolean(state.editingTypeId);
+    var now = new Date().toISOString();
+    var typeId;
+
+    if (wasEditing) {
+      var type = (state.data.types || []).find(function (item) {
+        return item.id === state.editingTypeId;
+      });
+      if (!type) {
+        showTypeError("Вид не найден — закройте окно и попробуйте снова.");
+        return;
+      }
+
+      type.label = label;
+      type.color = state.typeColor;
+      type.updatedAt = now;
+      typeId = type.id;
+    } else {
+      typeId = "custom-" + Store.uid();
+      state.data.types = state.data.types || [];
+      state.data.types.push({
+        id: typeId,
+        label: label,
+        color: state.typeColor,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    state.formType = typeId;
+    renderFormTypes();
+    syncFormType();
+    renderTypeList();
+
+    closeModal(els.typeModal);
+    persist(wasEditing ? "Вид дохода изменён" : "Вид дохода добавлен");
+  }
+
+  function deleteType(id) {
+    var type = (state.data.types || []).find(function (item) {
+      return item.id === id;
+    });
+    if (!type) return;
+
+    var count = typeUsage(id);
+    if (count) {
+      showTypeError(
+        "Нельзя удалить: вид используется в " + count + " " +
+        plural(count, "записи", "записях", "записях") + ". Сначала измените эти записи."
+      );
+      return;
+    }
+
+    confirmAction(
+      "Удалить вид дохода?",
+      "«" + type.label + "» будет удалён из списка. Записей с ним нет.",
+      "Удалить",
+      function () {
+        state.data.types = (state.data.types || []).filter(function (item) {
+          return item.id !== id;
+        });
+
+        if (state.formType === id) state.formType = "advance";
+        if (state.types.has(id)) state.types.delete(id);
+        if (state.editingTypeId === id) resetTypeForm();
+
+        renderFormTypes();
+        syncFormType();
+        renderTypeList();
+        persist("Вид дохода удалён");
+      }
+    );
+  }
+
+  function handleTypeListClick(event) {
+    var action = event.target.closest("[data-act]");
+    if (!action) return;
+
+    var item = action.closest("[data-type-id]");
+    if (!item) return;
+
+    var id = item.dataset.typeId;
+    if (action.dataset.act === "edit-type") {
+      startTypeEdit(id);
+    } else if (action.dataset.act === "delete-type") {
+      deleteType(id);
+    }
+  }
+
+  function handleTypeColorsClick(event) {
+    var swatch = event.target.closest("[data-color]");
+    if (!swatch) return;
+
+    state.typeColor = swatch.dataset.color;
+    els.typeError.hidden = true;
+    renderTypeColors();
+  }
+
   /* --------------------------- сохранение ------------------------- */
 
   function persist(successMessage) {
@@ -1311,6 +1617,10 @@
           });
           localSnapshot.sources = mergedSources;
 
+          // Свои виды дохода тоже не теряем при подключении.
+          var mergedTypes = mergeTypes(localSnapshot.types || [], remote.types || []);
+          localSnapshot.types = mergedTypes;
+
           if (!remoteEntries.length && localSnapshot.entries.length) {
             state.data = localSnapshot;
             return Store.save(localSnapshot).then(function (saveResult) {
@@ -1324,6 +1634,7 @@
             var mergedData = Store.emptyData();
             mergedData.entries = mergeEntries(localSnapshot.entries, remoteEntries);
             mergedData.sources = mergedSources;
+            mergedData.types = mergedTypes;
 
             state.data = mergedData;
             return Store.save(mergedData).then(function (saveResult) {
@@ -1337,11 +1648,15 @@
             });
           }
 
-          // Локальных записей нет, но есть источники, которых нет в файле — сохраняем их.
-          if (mergedSources.length !== (remote.sources || []).length) {
-            var sourceData = Store.normalize({ sources: mergedSources, entries: remoteEntries });
-            state.data = sourceData;
-            return Store.save(sourceData).then(function (saveResult) {
+          // Локальных записей нет, но есть источники или виды, которых нет в файле — сохраняем их.
+          if (mergedSources.length !== (remote.sources || []).length || typesDiffer(mergedTypes, remote.types)) {
+            var mergedRemoteData = Store.normalize({
+              sources: mergedSources,
+              types: mergedTypes,
+              entries: remoteEntries,
+            });
+            state.data = mergedRemoteData;
+            return Store.save(mergedRemoteData).then(function (saveResult) {
               state.data = saveResult.data;
               return { loaded: true, entries: remoteEntries.length };
             });
@@ -1454,8 +1769,10 @@
       "Удалить всё",
       function () {
         var sources = (state.data.sources || []).slice();
+        var types = (state.data.types || []).slice();
         state.data = Store.emptyData();
         state.data.sources = sources;
+        state.data.types = types;
         persist("Все записи удалены");
         closeModal(els.settingsModal);
       }
@@ -1477,15 +1794,19 @@
       renderSourceModalList();
     }
 
+    if (modal === els.typeModal) {
+      resetTypeForm();
+    }
+
     modal.hidden = true;
-    var anyOpen = ["entryModal", "settingsModal", "sourceModal", "confirmModal"].some(function (id) {
+    var anyOpen = ["entryModal", "settingsModal", "sourceModal", "typeModal", "confirmModal"].some(function (id) {
       return els[id] && !els[id].hidden;
     });
     if (!anyOpen) document.body.classList.remove("is-locked");
   }
 
   function closeTopModal() {
-    var order = ["confirmModal", "sourceModal", "settingsModal", "entryModal"];
+    var order = ["confirmModal", "typeModal", "sourceModal", "settingsModal", "entryModal"];
     for (var i = 0; i < order.length; i += 1) {
       var modal = els[order[i]];
       if (modal && !modal.hidden) {
@@ -1619,11 +1940,31 @@
 
     // форма записи
     els.formTypes.addEventListener("click", function (event) {
+      var addButton = event.target.closest('[data-act="add-type"]');
+      if (addButton) {
+        openTypeManager();
+        return;
+      }
+
       var button = event.target.closest("button[data-type]");
       if (!button) return;
       state.formType = button.dataset.type;
       syncFormType();
     });
+
+    // виды дохода
+    if (els.typeForm) {
+      els.typeForm.addEventListener("submit", handleTypeSubmit);
+    }
+    if (els.typeColors) {
+      els.typeColors.addEventListener("click", handleTypeColorsClick);
+    }
+    if (els.cancelTypeEditBtn) {
+      els.cancelTypeEditBtn.addEventListener("click", cancelTypeEdit);
+    }
+    if (els.typeList) {
+      els.typeList.addEventListener("click", handleTypeListClick);
+    }
 
     els.formMethod.addEventListener("click", function (event) {
       var button = event.target.closest("button[data-method]");

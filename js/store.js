@@ -65,8 +65,52 @@
     return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
   }
 
+  var BUILTIN_TYPE_IDS = {
+    advance: true,
+    salary: true,
+    plant_cash: true,
+    side: true,
+    trip: true,
+  };
+
   function emptyData() {
-    return { version: 1, updatedAt: null, sources: [], entries: [] };
+    return { version: 1, updatedAt: null, sources: [], types: [], entries: [] };
+  }
+
+  function normalizeColor(value) {
+    var color = String(value == null ? "" : value).trim();
+    return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "";
+  }
+
+  function normalizeTypes(list) {
+    var out = [];
+    var ids = Object.create(null);
+    var labels = Object.create(null);
+
+    (Array.isArray(list) ? list : []).forEach(function (item) {
+      if (!item || typeof item !== "object") return;
+
+      var id = typeof item.id === "string" ? item.id.trim() : "";
+      var label = typeof item.label === "string" ? item.label.trim().slice(0, 40) : "";
+      if (!id || !label) return;
+      if (BUILTIN_TYPE_IDS[id] || ids[id]) return;
+
+      var key = label.toLowerCase();
+      if (labels[key]) return;
+
+      ids[id] = true;
+      labels[key] = true;
+
+      out.push({
+        id: id,
+        label: label,
+        color: normalizeColor(item.color) || "#38bdf8",
+        createdAt: item.createdAt || null,
+        updatedAt: item.updatedAt || null,
+      });
+    });
+
+    return out;
   }
 
   function normalizeSources(list) {
@@ -133,6 +177,8 @@
     out.sources.sort(function (a, b) {
       return a.localeCompare(b, "ru");
     });
+
+    out.types = normalizeTypes(data.types);
 
     out.updatedAt = typeof data.updatedAt === "string" ? data.updatedAt : null;
     return out;

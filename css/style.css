@@ -1406,6 +1406,28 @@ a {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--type-color, var(--muted)) 16%, transparent);
 }
 
+.type--add {
+  justify-content: center;
+  border-style: dashed;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.type--add i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+  font-size: 15px;
+  font-style: normal;
+  line-height: 1;
+}
+
 .type.is-active {
   color: var(--text);
   font-weight: 600;
@@ -1539,6 +1561,54 @@ a {
   height: 42px;
 }
 
+.type-form .field + .field {
+  margin-top: 12px;
+}
+
+.type-form .modal__actions {
+  margin-top: 16px;
+}
+
+.type-manager {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.type-manager__title {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--swatch) 45%, transparent);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.swatch:hover {
+  transform: scale(1.08);
+}
+
+.swatch.is-active {
+  border-color: var(--panel);
+  box-shadow: 0 0 0 2px var(--swatch);
+  transform: scale(1.06);
+}
+
 .source-manager {
   display: grid;
   gap: 6px;
@@ -1606,6 +1676,15 @@ a {
   font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
+}
+
+.source-item__dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--dot, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot, var(--accent)) 16%, transparent);
 }
 
 .btn-row {
