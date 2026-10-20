@@ -1,6 +1,6 @@
 /* Простой service worker: приложение открывается без сети,
    данные всегда берутся из localStorage / GitHub API. */
-const CACHE = "income-shell-v1";
+const CACHE = "income-shell-v2";
 
 const SHELL = [
   "./",

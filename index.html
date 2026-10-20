@@ -214,11 +214,19 @@
           </div>
         </div>
 
-        <label class="field">
-          <span class="field__label">Источник дохода</span>
-          <input id="fSource" list="sourceList" maxlength="120" autocomplete="off" placeholder="Завод, организация, заказчик…" />
+        <div class="field">
+          <label class="field__label" for="fSource">Источник дохода</label>
+          <div class="field__row">
+            <input id="fSource" list="sourceList" maxlength="120" autocomplete="off" placeholder="Завод, организация, заказчик…" />
+            <button class="icon-btn field__add" id="addSourceFromForm" type="button" title="Добавить новый источник" aria-label="Добавить новый источник">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
           <datalist id="sourceList"></datalist>
-        </label>
+          <span class="field__hint">Можно выбрать из списка или ввести новый</span>
+        </div>
 
         <label class="field">
           <span class="field__label">Комментарий <span class="field__hint">необязательно</span></span>
@@ -302,6 +310,15 @@
         </form>
 
         <div class="settings-extra">
+          <div class="settings-extra__head">
+            <h3>Источники дохода</h3>
+            <button class="btn btn--sm" id="addSourceBtn" type="button">Добавить</button>
+          </div>
+          <p class="hint">Свои заводы, организации и заказчики. Источник можно переименовать или удалить — записи при этом сохранятся.</p>
+          <div class="source-manager" id="sourceListManager"></div>
+        </div>
+
+        <div class="settings-extra">
           <h3>Данные</h3>
           <div class="btn-row">
             <button class="btn" type="button" id="exportBtn">Скачать JSON</button>
@@ -314,6 +331,35 @@
           <p class="hint" id="storageHint"></p>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ======================= МОДАЛКА: ИСТОЧНИК ======================= -->
+  <div class="modal" id="sourceModal" hidden>
+    <div class="modal__overlay" data-close></div>
+    <div class="modal__card modal__card--sm" role="dialog" aria-modal="true" aria-labelledby="sourceTitle">
+      <div class="modal__head">
+        <h2 id="sourceTitle">Новый источник</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <form class="modal__body form" id="sourceForm" novalidate>
+        <label class="field">
+          <span class="field__label">Название источника</span>
+          <input id="sourceName" maxlength="120" autocomplete="off" placeholder="Например: Завод «Рифей»" />
+        </label>
+
+        <p class="form__error" id="sourceError" hidden></p>
+
+        <div class="modal__actions">
+          <button class="btn" type="button" data-close>Отмена</button>
+          <button class="btn btn--primary" type="submit" id="saveSourceBtn">Добавить</button>
+        </div>
+      </form>
     </div>
   </div>
 
